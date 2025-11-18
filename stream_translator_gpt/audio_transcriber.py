@@ -25,12 +25,13 @@ def _filter_text(text: str, transcription_filters: str):
 class AudioTranscriber(LoopWorkerBase):
 
     def __init__(self, transcription_filters: str, print_result: bool, output_timestamps: bool,
-                 disable_transcription_context: bool, transcription_initial_prompt: str):
+                 disable_transcription_context: bool, transcription_initial_prompt: str, whisper_task: str):
         self.transcription_filters = transcription_filters
         self.print_result = print_result
         self.output_timestamps = output_timestamps
         self.disable_transcription_context = disable_transcription_context
         self.transcription_initial_prompt = transcription_initial_prompt
+        self.task = whisper_task
 
         self.constant_prompt = re.sub(r',\s*', ', ',
                                       transcription_initial_prompt) if transcription_initial_prompt else ""
@@ -49,6 +50,7 @@ class AudioTranscriber(LoopWorkerBase):
     def loop(self, input_queue: queue.SimpleQueue[TranslationTask], output_queue: queue.SimpleQueue[TranslationTask]):
         previous_text = ""
 
+        is_translating = self.task == 'translate'
         while True:
             task = input_queue.get()
             if task is None:
@@ -66,8 +68,8 @@ class AudioTranscriber(LoopWorkerBase):
                         dynamic_context = ""
 
             initial_prompt = f"{self.constant_prompt} {dynamic_context}".strip()
-            if not initial_prompt:
-                initial_prompt = None
+            #if not initial_prompt:
+                #initial_prompt = None
 
             text, tokens = self.transcribe(task.audio, initial_prompt=initial_prompt)
 
@@ -84,16 +86,22 @@ class AudioTranscriber(LoopWorkerBase):
                     self.reset_context()
                     is_repetitive = True
 
-            task.transcript = _filter_text(text, self.transcription_filters).strip()
-            if not task.transcript:
+            result = _filter_text(text, self.transcription_filters).strip()
+            if is_translating:
+                task.translation = result
+            else:
+                task.transcript = result
+            if not task.transcript or not task.translation:
                 continue
-            previous_text = "" if is_repetitive else task.transcript
-            if self.print_result:
+            previous_text = "" if is_repetitive else result
+
+            # Only print transcripts here; translations are printed by ResultExporter
+            if self.print_result and not is_translating:
                 if self.output_timestamps:
                     timestamp_text = f'{sec2str(task.time_range[0])} --> {sec2str(task.time_range[1])}'
-                    print(timestamp_text + ' ' + task.transcript)
+                    print(timestamp_text + ' ' + result)
                 else:
-                    print(task.transcript)
+                    print(result)
             output_queue.put(task)
 
 
@@ -111,7 +119,8 @@ class OpenaiWhisper(AudioTranscriber):
         result = self.model.transcribe(audio,
                                        without_timestamps=True,
                                        language=self.language,
-                                       initial_prompt=initial_prompt)
+                                       initial_prompt=initial_prompt,
+                                       task=self.task)
         text = result.get('text', '')
         tokens = []
         for segment in result.get('segments', []):
@@ -130,7 +139,7 @@ class FasterWhisper(AudioTranscriber):
         self.language = language
 
     def transcribe(self, audio: np.array, initial_prompt: str = None) -> tuple[str, list | None]:
-        segments, info = self.model.transcribe(audio, language=self.language, initial_prompt=initial_prompt)
+        segments, info = self.model.transcribe(audio, language=self.language, initial_prompt=initial_prompt, task=self.task)
         text = ''
         tokens = []
         for segment in segments:
@@ -160,7 +169,7 @@ class SimulStreaming(AudioTranscriber):
             "audio_max_len": 10.0,
             "audio_min_len": 0.0,
             "segment_length": 0.5,
-            "task": "transcribe",
+            "task": self.task,
             "beams": 1,
             "decoder_type": "greedy",
             "never_fire": False,
@@ -208,6 +217,7 @@ class RemoteOpenaiTranscriber(AudioTranscriber):
             'model': self.model,
             'file': audio_buffer,
             'language': self.language,
+            'task': self.task,
         }
         if initial_prompt:
             call_args['prompt'] = initial_prompt
