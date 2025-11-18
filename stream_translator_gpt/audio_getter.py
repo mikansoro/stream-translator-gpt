@@ -27,10 +27,12 @@ def _transport(ytdlp_proc, ffmpeg_proc):
     ffmpeg_proc.kill()
 
 
-def _open_stream(url: str, format: str, cookies: str, proxy: str, cwd: str):
+def _open_stream(url: str, format: str, cookies: str, cookies_from_browser: str, proxy: str, cwd: str):
     cmd = ['yt-dlp', url, '-f', format, '-o', '-', '-q']
     if cookies:
         cmd.extend(['--cookies', cookies])
+    if cookies_from_browser:
+        cmd.extend(['--cookies-from-browser', cookies_from_browser])
     if proxy:
         cmd.extend(['--proxy', proxy])
     ytdlp_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, cwd=cwd)
@@ -52,10 +54,11 @@ def _open_stream(url: str, format: str, cookies: str, proxy: str, cwd: str):
 
 class StreamAudioGetter(LoopWorkerBase):
 
-    def __init__(self, url: str, format: str, cookies: str, proxy: str) -> None:
+    def __init__(self, url: str, format: str, cookies: str, cookies_from_browser: str, proxy: str) -> None:
         self.url = url
         self.format = format
         self.cookies = cookies
+        self.cookies_from_browser = cookies_from_browser
         self.proxy = proxy
         self.temp_dir = tempfile.mkdtemp()
         self.ffmpeg_process = None
@@ -77,7 +80,8 @@ class StreamAudioGetter(LoopWorkerBase):
 
     def loop(self, output_queue: queue.SimpleQueue[np.array]):
         print(f'{INFO}Opening stream: {self.url}')
-        self.ffmpeg_process, self.ytdlp_process = _open_stream(self.url, self.format, self.cookies, self.proxy,
+        self.ffmpeg_process, self.ytdlp_process = _open_stream(self.url, self.format, self.cookies,
+                                                               self.cookies_from_browser, self.proxy,
                                                                self.temp_dir)
         while self.ffmpeg_process.poll() is None:
             in_bytes = self.ffmpeg_process.stdout.read(self.byte_size)

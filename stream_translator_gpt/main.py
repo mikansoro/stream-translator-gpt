@@ -21,7 +21,7 @@ from .result_exporter import ResultExporter
 from . import __version__
 
 
-def main(url, proxy, openai_api_key, google_api_key, format, cookies, input_proxy, device_index,
+def main(url, proxy, openai_api_key, google_api_key, format, cookies, cookies_from_browser, input_proxy, device_index,
          device_recording_interval, mic, min_audio_length, max_audio_length, target_audio_length,
          continuous_no_speech_threshold, disable_dynamic_no_speech_threshold, prefix_retention_length, vad_threshold,
          disable_dynamic_vad_threshold, model, language, use_faster_whisper, use_simul_streaming, use_whisper_translation,
@@ -60,6 +60,7 @@ def main(url, proxy, openai_api_key, google_api_key, format, cookies, input_prox
                     url=url,
                     format=format,
                     cookies=cookies,
+                    cookies_from_browser=cookies_from_browser,
                     proxy=input_proxy,
                 )
             else:
@@ -231,7 +232,13 @@ def cli():
                         type=str,
                         default=None,
                         help='Used to open member-only stream, this parameter will be passed directly to yt-dlp.')
-
+    parser.add_argument(
+        '--cookies_from_browser',
+        type=str,
+        default=None,
+        help=
+        'Extract cookies from browser and pass to yt-dlp. Examples: chrome, firefox, edge, safari, opera, brave. Can also specify profile like "chrome:Profile 1".'
+    )
     parser.add_argument('--input_proxy',
                         type=str,
                         default=None,
