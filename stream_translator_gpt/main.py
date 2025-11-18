@@ -22,7 +22,7 @@ from . import __version__
 
 
 def main(url, proxy, openai_api_key, google_api_key, format, cookies, cookies_from_browser, input_proxy, device_index,
-         device_recording_interval, mic, min_audio_length, max_audio_length, target_audio_length,
+         device_recording_interval, mic, min_audio_length, max_audio_length, target_audio_length, user_agent,
          continuous_no_speech_threshold, disable_dynamic_no_speech_threshold, prefix_retention_length, vad_threshold,
          disable_dynamic_vad_threshold, model, language, use_faster_whisper, use_simul_streaming, use_whisper_translation,
          use_openai_transcription_api, openai_transcription_model, transcription_filters, disable_transcription_context,
@@ -61,6 +61,7 @@ def main(url, proxy, openai_api_key, google_api_key, format, cookies, cookies_fr
                     format=format,
                     cookies=cookies,
                     cookies_from_browser=cookies_from_browser,
+                    user_agent=user_agent,
                     proxy=input_proxy,
                 )
             else:
@@ -244,6 +245,10 @@ def cli():
                         default=None,
                         help='Use the specified HTTP/HTTPS/SOCKS proxy for yt-dlp, '
                         'e.g. http://127.0.0.1:7890.')
+    parser.add_argument('--user_agent',
+                        type=str,
+                        default=None,
+                        help='Custom user agent string for yt-dlp, useful for sites with user agent checks.')
     parser.add_argument(
         '--device_index',
         type=int,
