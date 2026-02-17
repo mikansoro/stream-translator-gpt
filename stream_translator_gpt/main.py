@@ -21,10 +21,10 @@ from .result_exporter import ResultExporter
 from . import __version__
 
 
-def main(url, proxy, openai_api_key, google_api_key, format, cookies, input_proxy, device_index,
-         device_recording_interval, mic, min_audio_length, max_audio_length, target_audio_length,
+def main(url, proxy, openai_api_key, google_api_key, format, cookies, cookies_from_browser, input_proxy, device_index,
+         device_recording_interval, mic, min_audio_length, max_audio_length, target_audio_length, user_agent,
          continuous_no_speech_threshold, disable_dynamic_no_speech_threshold, prefix_retention_length, vad_threshold,
-         disable_dynamic_vad_threshold, model, language, use_faster_whisper, use_simul_streaming,
+         disable_dynamic_vad_threshold, model, language, use_faster_whisper, use_simul_streaming, use_whisper_translation,
          use_openai_transcription_api, openai_transcription_model, transcription_filters, disable_transcription_context,
          transcription_initial_prompt, translation_prompt, translation_history_size, gpt_model, gemini_model,
          translation_timeout, openai_base_url, google_base_url, processing_proxy, use_json_result,
@@ -35,10 +35,14 @@ def main(url, proxy, openai_api_key, google_api_key, format, cookies, input_prox
 
     ApiKeyPool.init(openai_api_key=openai_api_key, google_api_key=google_api_key)
 
+    # Determine whisper task type
+    whisper_task = 'translate' if use_whisper_translation else 'transcribe'
+
     # Init queues
     getter_to_slicer_queue = queue.SimpleQueue()
     slicer_to_transcriber_queue = queue.SimpleQueue()
     transcriber_to_translator_queue = queue.SimpleQueue()
+    # Use separate queue for exporter if using LLM translation; otherwise connect directly
     translator_to_exporter_queue = queue.SimpleQueue() if translation_prompt else transcriber_to_translator_queue
 
     # Init workers
@@ -56,6 +60,8 @@ def main(url, proxy, openai_api_key, google_api_key, format, cookies, input_prox
                     url=url,
                     format=format,
                     cookies=cookies,
+                    cookies_from_browser=cookies_from_browser,
+                    user_agent=user_agent,
                     proxy=input_proxy,
                 )
             else:
@@ -81,6 +87,7 @@ def main(url, proxy, openai_api_key, google_api_key, format, cookies, input_prox
                 'output_timestamps': output_timestamps,
                 'disable_transcription_context': disable_transcription_context,
                 'transcription_initial_prompt': transcription_initial_prompt,
+                'whisper_task': whisper_task
             }
             if use_simul_streaming:
                 return SimulStreaming(model=model,
@@ -226,12 +233,22 @@ def cli():
                         type=str,
                         default=None,
                         help='Used to open member-only stream, this parameter will be passed directly to yt-dlp.')
-
+    parser.add_argument(
+        '--cookies_from_browser',
+        type=str,
+        default=None,
+        help=
+        'Extract cookies from browser and pass to yt-dlp. Examples: chrome, firefox, edge, safari, opera, brave. Can also specify profile like "chrome:Profile 1".'
+    )
     parser.add_argument('--input_proxy',
                         type=str,
                         default=None,
                         help='Use the specified HTTP/HTTPS/SOCKS proxy for yt-dlp, '
                         'e.g. http://127.0.0.1:7890.')
+    parser.add_argument('--user_agent',
+                        type=str,
+                        default=None,
+                        help='Custom user agent string for yt-dlp, useful for sites with user agent checks.')
     parser.add_argument(
         '--device_index',
         type=int,
@@ -328,6 +345,12 @@ def cli():
                         type=str,
                         default=None,
                         help='(Deprecated) Use --transcription_filters instead.')
+    parser.add_argument(
+        '--use_whisper_translation',
+        action='store_true',
+        help=
+        'Set this flag to use Whisper\'s native translation to English instead of GPT/Gemini. This bypasses external translation services entirely.'
+    )
     parser.add_argument(
         '--transcription_initial_prompt',
         type=str,
@@ -525,6 +548,12 @@ def cli():
 
     args.pop('gpt_base_url', None)
     args.pop('gemini_base_url', None)
+    if args['use_whisper_translation'] and args['translation_prompt']:
+        print(f'{ERROR}Cannot use both --use_whisper_translation and --translation_prompt. Choose one translation method.')
+        sys.exit(0)
+
+    if args['use_whisper_translation'] and args['language'] == 'auto':
+        print(f'{WARNING}Using Whisper translation with auto language detection. For better results, specify --language explicitly.')
 
     if args['language'] == 'auto':
         args['language'] = None
