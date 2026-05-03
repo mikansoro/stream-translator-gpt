@@ -11,9 +11,20 @@ import time
 
 import ffmpeg
 import numpy as np
-from scipy import signal
+from scipy.signal import resample
 
 from .common import SAMPLE_RATE, SAMPLES_PER_FRAME, LoopWorkerBase, INFO, WARNING
+
+
+def _read_ffmpeg_loop(ffmpeg_process, byte_size: int, output_queue):
+    while ffmpeg_process.poll() is None:
+        in_bytes = ffmpeg_process.stdout.read(byte_size)
+        if not in_bytes:
+            break
+        if len(in_bytes) != byte_size:
+            continue
+        audio = np.frombuffer(in_bytes, np.float32).flatten()
+        output_queue.put(audio)
 
 
 def _transport(ytdlp_proc, ffmpeg_proc):
@@ -27,12 +38,17 @@ def _transport(ytdlp_proc, ffmpeg_proc):
     ffmpeg_proc.kill()
 
 
-def _open_stream(url: str, format: str, cookies: str, proxy: str, cwd: str):
-    cmd = ['yt-dlp', url, '-f', format, '-o', '-', '-q']
+def _open_stream(url: str, format: str, cookies: str, cookies_from_browser: str, proxy: str, user_agent: str,
+                 cwd: str):
+    cmd = [sys.executable, '-m', 'yt_dlp', url, '-f', format, '-o', '-', '-q']
     if cookies:
         cmd.extend(['--cookies', cookies])
+    if cookies_from_browser:
+        cmd.extend(['--cookies-from-browser', cookies_from_browser])
     if proxy:
         cmd.extend(['--proxy', proxy])
+    if user_agent:
+        cmd.extend(['--user-agent', user_agent])
     ytdlp_process = subprocess.Popen(cmd, stdout=subprocess.PIPE, cwd=cwd)
 
     try:
@@ -52,11 +68,14 @@ def _open_stream(url: str, format: str, cookies: str, proxy: str, cwd: str):
 
 class StreamAudioGetter(LoopWorkerBase):
 
-    def __init__(self, url: str, format: str, cookies: str, proxy: str) -> None:
+    def __init__(self, url: str, format: str, cookies: str, cookies_from_browser: str, proxy: str,
+                 user_agent: str) -> None:
         self.url = url
         self.format = format
         self.cookies = cookies
+        self.cookies_from_browser = cookies_from_browser
         self.proxy = proxy
+        self.user_agent = user_agent
         self.temp_dir = tempfile.mkdtemp()
         self.ffmpeg_process = None
         self.ytdlp_process = None
@@ -77,16 +96,10 @@ class StreamAudioGetter(LoopWorkerBase):
 
     def loop(self, output_queue: queue.SimpleQueue[np.array]):
         print(f'{INFO}Opening stream: {self.url}')
-        self.ffmpeg_process, self.ytdlp_process = _open_stream(self.url, self.format, self.cookies, self.proxy,
-                                                               self.temp_dir)
-        while self.ffmpeg_process.poll() is None:
-            in_bytes = self.ffmpeg_process.stdout.read(self.byte_size)
-            if not in_bytes:
-                break
-            if len(in_bytes) != self.byte_size:
-                continue
-            audio = np.frombuffer(in_bytes, np.float32).flatten()
-            output_queue.put(audio)
+        self.ffmpeg_process, self.ytdlp_process = _open_stream(self.url, self.format, self.cookies,
+                                                                self.cookies_from_browser, self.proxy, self.user_agent,
+                                                                self.temp_dir)
+        _read_ffmpeg_loop(self.ffmpeg_process, self.byte_size, output_queue)
 
         self.ffmpeg_process.kill()
         if self.ytdlp_process:
@@ -121,14 +134,7 @@ class LocalFileAudioGetter(LoopWorkerBase):
         except ffmpeg.Error as e:
             raise RuntimeError(f'Failed to load audio: {e.stderr.decode()}') from e
 
-        while self.ffmpeg_process.poll() is None:
-            in_bytes = self.ffmpeg_process.stdout.read(self.byte_size)
-            if not in_bytes:
-                break
-            if len(in_bytes) != self.byte_size:
-                continue
-            audio = np.frombuffer(in_bytes, np.float32).flatten()
-            output_queue.put(audio)
+        _read_ffmpeg_loop(self.ffmpeg_process, self.byte_size, output_queue)
 
         self.ffmpeg_process.kill()
         output_queue.put(None)
@@ -205,7 +211,7 @@ class DeviceAudioGetter(LoopWorkerBase):
             native_rate = int(device_info['defaultSampleRate'])
             try:
                 native_channels = int(device_info['maxInputChannels'])
-            except:
+            except Exception:
                 native_channels = 1
             if native_channels < 1:
                 native_channels = 2
@@ -228,7 +234,7 @@ class DeviceAudioGetter(LoopWorkerBase):
                         audio = audio.reshape(-1, native_channels).mean(axis=1)
                     if native_rate != SAMPLE_RATE:
                         target_len = int(len(audio) * SAMPLE_RATE / native_rate)
-                        audio = signal.resample(audio, target_len)
+                        audio = resample(audio, target_len)
                     buffer = np.concatenate((buffer, audio))
                     while len(buffer) >= SAMPLES_PER_FRAME:
                         chunk = buffer[:SAMPLES_PER_FRAME]

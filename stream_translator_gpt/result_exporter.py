@@ -1,5 +1,7 @@
 import os
 import queue
+from urllib.parse import urlencode
+
 import requests
 
 from .common import TranslationTask, LoopWorkerBase, sec2str, start_daemon_thread, BOLD, ENDC
@@ -60,9 +62,10 @@ class ResultExporter(LoopWorkerBase):
             text = self.telegram_queue.get()
             if text is None:
                 break
-            url = f'https://api.telegram.org/bot{token}/sendMessage?chat_id={chat_id}&text={text}'
+            url = f'https://api.telegram.org/bot{token}/sendMessage'
+            params = urlencode({'chat_id': chat_id, 'text': text})
             try:
-                requests.post(url, timeout=10, proxies=self.proxies)
+                requests.post(f'{url}?{params}', timeout=10, proxies=self.proxies)
             except Exception as e:
                 print(e)
 
@@ -91,7 +94,7 @@ class ResultExporter(LoopWorkerBase):
                     self.file_queue.put(None)
                 break
             timestamp_text = f'{sec2str(task.time_range[0])} --> {sec2str(task.time_range[1])}'
-            text_to_send = (task.transcript + '\n') if self.output_whisper_result else ''
+            text_to_send = (task.transcript + '\n') if self.output_whisper_result and task.transcript else ''
             if self.output_timestamps:
                 text_to_send = timestamp_text + '\n' + text_to_send
             if task.translation:

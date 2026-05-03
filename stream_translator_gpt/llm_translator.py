@@ -1,10 +1,8 @@
 import json
-import os
 import queue
+import re
 import threading
 import time
-
-import re
 from collections import deque
 from datetime import datetime, timedelta, timezone
 
@@ -65,7 +63,15 @@ class LLMClient():
                  history_size: int,
                  proxy: str,
                  use_json_result: bool,
-                 google_base_url: str = None) -> None:
+                 google_base_url: str = None,
+                 prompt_cache_key: str = None,
+                 temperature: float = None,
+                 top_p: float = None,
+                 top_k: int = None,
+                 reasoning_effort: str = None,
+                 verbosity: str = None,
+                 service_tier: str = None,
+                 debug_mode: bool = False) -> None:
         if llm_type not in (self.LLM_TYPE.GPT, self.LLM_TYPE.GEMINI):
             raise ValueError(f'Unknow LLM type: {llm_type}')
         print(f'{INFO}Using {model} API as translation engine.')
@@ -73,85 +79,114 @@ class LLMClient():
         self.model = model
         self.prompt = prompt
         self.history_size = history_size
-        self.history_messages = []
         self.proxy = proxy
         self.use_json_result = use_json_result
         self.google_base_url = google_base_url
+        self.prompt_cache_key = prompt_cache_key
+        self.temperature = temperature
+        self.top_p = top_p
+        self.top_k = top_k
+        self.reasoning_effort = reasoning_effort
+        self.verbosity = verbosity
+        self.service_tier = service_tier
+        self.debug_mode = debug_mode
 
-    def _append_history_message(self, user_content: str, assistant_content: str):
-        if not user_content or not assistant_content:
-            return
-        self.history_messages.extend([{
-            'role': 'user',
-            'content': user_content
-        }, {
-            'role': 'assistant',
-            'content': assistant_content
-        }])
-        while (len(self.history_messages) > self.history_size * 2):
-            self.history_messages.pop(0)
+    def _build_messages(self, translation_task: TranslationTask):
+        system_prompt = 'You are a professional translator.'
+        if self.use_json_result:
+            system_prompt += '\nOutput the answer in json format, key is translation.'
+
+        if self.history_size and translation_task.context_transcripts is not None:
+            system_prompt += f'\n{self.prompt}'
+            system_prompt += '\nThe text under "Reference" is prior context, do NOT translate it.'
+            system_prompt += ' Translate ONLY the text under "Translate".'
+
+            user_content = ''
+            if translation_task.context_transcripts:
+                user_content += '**Reference:**'
+                for t in translation_task.context_transcripts:
+                    user_content += f'\n> {t}'
+                user_content += '\n'
+            user_content += f'\n**Translate:**\n{translation_task.transcript}'
+        else:
+            user_content = f'{self.prompt}: \n{translation_task.transcript}'
+
+        system_prompt += '\nOutput only the translation in one line, nothing else.'
+        return system_prompt, user_content
+
+    def _validate_translation(self, translation: str) -> str:
+        if not translation:
+            return translation
+        lines = [l.strip() for l in translation.strip().split('\n') if l.strip()]
+        if len(lines) > 1:
+            return lines[-1]
+        return translation
 
     def _translate_by_gpt(self, translation_task: TranslationTask):
         # https://platform.openai.com/docs/api-reference/chat/create?lang=python
         from openai import OpenAI
         import httpx
 
-        ApiKeyPool.use_openai_api()
-        client = OpenAI(http_client=httpx.Client(proxy=self.proxy, verify=False))
-        system_prompt = 'You are a professional translator. Translate the text accurately and concisely. Do not output any explanation or extra text.'
-        if self.use_json_result:
-            system_prompt += " Output the answer in json format, key is translation."
+        api_key = ApiKeyPool.get_openai_api_key()
+        client = OpenAI(api_key=api_key, http_client=httpx.Client(proxy=self.proxy, verify=False))
+
+        system_prompt, user_content = self._build_messages(translation_task)
+        if self.debug_mode:
+            print(f'{INFO}[System] {system_prompt}')
+            print(f'{INFO}[User] {user_content}')
         messages = [{'role': 'system', 'content': system_prompt}]
-        messages.extend(self.history_messages)
-        user_content = f'{self.prompt}: \n{translation_task.transcript}'
         messages.append({'role': 'user', 'content': user_content})
 
         try:
-            if self.model.startswith('gpt-4') or self.model.startswith('gpt-3'):
-                completion = client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    response_format={"type": "json_object"} if self.use_json_result else None,
-                    temperature=0.7,
-                    top_p=0.9,
-                    stop=None if self.use_json_result else ['\n'],
-                )
-            else:
-                completion = client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    response_format={"type": "json_object"} if self.use_json_result else None,
-                    reasoning_effort='minimal',
-                )
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+            }
+
+            if self.use_json_result:
+                kwargs["response_format"] = {"type": "json_object"}
+
+            match = re.match(r'^gpt-(\d+(?:\.\d+)?)', self.model)
+            if match:
+                version = float(match.group(1))
+                if version < 5.0 or version >= 5.1:
+                    kwargs["temperature"] = 0.7
+                    kwargs["top_p"] = 0.9
+                if version >= 5.0:
+                    kwargs["reasoning_effort"] = "none" if version >= 5.1 else "minimal"
+
+            if self.prompt_cache_key is not None:
+                kwargs["prompt_cache_key"] = self.prompt_cache_key
+            if self.temperature is not None:
+                kwargs["temperature"] = self.temperature
+            if self.top_p is not None:
+                kwargs["top_p"] = self.top_p
+            if self.reasoning_effort is not None:
+                kwargs["reasoning_effort"] = self.reasoning_effort
+            if self.verbosity is not None:
+                kwargs["verbosity"] = self.verbosity
+            if self.service_tier is not None:
+                kwargs["service_tier"] = self.service_tier
+
+            completion = client.chat.completions.create(**kwargs)
 
             translation_task.translation = completion.choices[0].message.content
+            if self.debug_mode and hasattr(completion, 'usage') and completion.usage:
+                print(f'{INFO}[Usage] {completion.usage}')
             if self.use_json_result:
                 translation_task.translation = _parse_json_completion(translation_task.translation)
+            translation_task.translation = self._validate_translation(translation_task.translation)
         except Exception as e:
             translation_task.translation_failed = True
             print(e)
             return
-        if self.history_size:
-            self._append_history_message(user_content, translation_task.translation)
-
-    @staticmethod
-    def _gpt_to_gemini(gpt_messages: list):
-        gemini_messages = []
-        for gpt_message in gpt_messages:
-            gemini_message = {}
-            gemini_message['role'] = gpt_message['role']
-            if gemini_message['role'] == 'assistant':
-                gemini_message['role'] = 'model'
-            gemini_message['parts'] = [{'text': gpt_message['content']}]
-            gemini_messages.append(gemini_message)
-        return gemini_messages
 
     def _translate_by_gemini(self, translation_task: TranslationTask):
         # https://ai.google.dev/tutorials/python_quickstart
         from google import genai
         from google.genai import types
 
-        ApiKeyPool.use_google_api()
+        api_key = ApiKeyPool.get_google_api_key()
 
         http_options = {}
         if self.proxy:
@@ -162,24 +197,21 @@ class LLMClient():
         if self.google_base_url:
             http_options['base_url'] = self.google_base_url
 
-        client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"), http_options=http_options)
+        client = genai.Client(api_key=api_key, http_options=http_options)
 
-        system_prompt = 'You are a professional translator. Translate the text accurately and concisely. Do not output any explanation or extra text.'
-        if self.use_json_result:
-            system_prompt += " Output the answer in json format, key is translation."
-
-        messages = self._gpt_to_gemini(self.history_messages)
-        user_content = f'{self.prompt}: \n{translation_task.transcript}'
-        messages.append({'role': 'user', 'parts': [{'text': user_content}]})
+        system_prompt, user_content = self._build_messages(translation_task)
+        if self.debug_mode:
+            print(f'{INFO}[System] {system_prompt}')
+            print(f'{INFO}[User] {user_content}')
+        messages = [{'role': 'user', 'parts': [{'text': user_content}]}]
 
         config = types.GenerateContentConfig(
             candidate_count=1,
             temperature=0.7,
             top_p=0.9,
             top_k=50,
-            stop_sequences=None if self.use_json_result else ['\n'],
             system_instruction=system_prompt,
-            thinking_config=types.ThinkingConfig(include_thoughts=False),
+            thinking_config=types.ThinkingConfig(thinking_budget=0),
             response_mime_type='application/json' if self.use_json_result else 'text/plain',
             safety_settings=[
                 types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
@@ -188,17 +220,25 @@ class LLMClient():
                 types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE')
             ])
 
+        if self.temperature is not None:
+            config.temperature = self.temperature
+        if self.top_p is not None:
+            config.top_p = self.top_p
+        if self.top_k is not None:
+            config.top_k = self.top_k
+
         try:
             response = client.models.generate_content(model=self.model, contents=messages, config=config)
             translation_task.translation = response.text
+            if self.debug_mode and hasattr(response, 'usage_metadata') and response.usage_metadata:
+                print(f'{INFO}[Usage] {response.usage_metadata}')
             if self.use_json_result:
                 translation_task.translation = _parse_json_completion(translation_task.translation)
+            translation_task.translation = self._validate_translation(translation_task.translation)
         except Exception as e:
             translation_task.translation_failed = True
             print(e)
             return
-        if self.history_size:
-            self._append_history_message(user_content, translation_task.translation)
 
     def translate(self, translation_task: TranslationTask):
         if self.llm_type == self.LLM_TYPE.GPT:
@@ -217,6 +257,12 @@ class ParallelTranslator(LoopWorkerBase):
         self.timeout = timeout
         self.retry_if_translation_fails = retry_if_translation_fails
         self.processing_queue = deque()
+        self.recent_transcripts = deque(maxlen=llm_client.history_size) if llm_client.history_size else None
+
+    def _prepare_context(self, task: TranslationTask):
+        if self.recent_transcripts is not None:
+            task.context_transcripts = list(self.recent_transcripts)
+            self.recent_transcripts.append(task.transcript)
 
     def _trigger(self, translation_task: TranslationTask):
         if not translation_task.start_time:
@@ -229,9 +275,11 @@ class ParallelTranslator(LoopWorkerBase):
     def _retrigger_failed_tasks(self):
         for task in self.processing_queue:
             if task.translation_failed and not _is_task_timeout(task, self.timeout):
+                task.retry_count = getattr(task, 'retry_count', 0) + 1
+                backoff = min(2**task.retry_count, 30)
                 self._trigger(task)
-                print(f'Translation failed: {task.transcript}')
-                time.sleep(1)
+                print(f'Translation failed, retrying in {backoff}s: {task.transcript}')
+                time.sleep(backoff)
 
     def _get_results(self):
         results = []
@@ -259,6 +307,7 @@ class ParallelTranslator(LoopWorkerBase):
                         time.sleep(0.1)
                     output_queue.put(None)
                     break
+                self._prepare_context(task)
                 self.processing_queue.append(task)
                 self._trigger(task)
             finished_tasks = self._get_results()
@@ -296,8 +345,10 @@ class SerialTranslator(LoopWorkerBase):
                         else:
                             print(f'Translation failed: {current_task.transcript}')
                             if self.retry_if_translation_fails:
+                                current_task.retry_count = getattr(current_task, 'retry_count', 0) + 1
+                                backoff = min(2**current_task.retry_count, 30)
                                 self._trigger(current_task)
-                                time.sleep(1)
+                                time.sleep(backoff)
                                 continue
                     output_queue.put(current_task)
                     current_task = None

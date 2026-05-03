@@ -12,20 +12,15 @@ Try it on Colab:
 
 ## Prerequisites
 
-**Linux or Windows:**
-
-1. Python >= 3.8 (Recommend >= 3.10)
-2. [**Install CUDA on your system**](https://developer.nvidia.com/cuda-downloads).
-3. [**Install cuDNN to your CUDA dir**](https://developer.nvidia.com/cudnn-downloads) if you want to use **Faster-Whisper**.
-4. [**Install PyTorch (with CUDA) to your Python**](https://pytorch.org/get-started/locally/).
-5. [**Create a Google API key**](https://aistudio.google.com/app/apikey) if you want to use **Gemini API** for translation.
-6. [**Create a OpenAI API key**](https://platform.openai.com/api-keys) if you want to use **OpenAI Transcription API** for transcription or **GPT API** for translation.
-
-**If you are in Windows, you also need to:**
-
-1. [**Install and add ffmpeg to your PATH.**](https://www.thewindowsclub.com/how-to-install-ffmpeg-on-windows-10#:~:text=Click%20New%20and%20type%20the,Click%20OK%20to%20apply%20changes.)
-2. Install [**yt-dlp**](https://github.com/yt-dlp/yt-dlp) and add it to your PATH.
-
+1. **Python** >= 3.8 (Recommend >= 3.10)
+2. **FFmpeg** (skip if already installed):
+   - Windows: `winget install ffmpeg`
+   - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
+3. [**Install CUDA on your system**](https://developer.nvidia.com/cuda-downloads).
+4. [**Install cuDNN to your CUDA dir**](https://developer.nvidia.com/cudnn-downloads) if you want to use **Faster-Whisper**.
+5. [**Install PyTorch (with CUDA) to your Python**](https://pytorch.org/get-started/locally/).
+6. [**Create a Google API key**](https://aistudio.google.com/app/apikey) if you want to use **Gemini API** for translation.
+7. [**Create a OpenAI API key**](https://platform.openai.com/api-keys) if you want to use **OpenAI Transcription API** for transcription or **GPT API** for translation.
 
 ## WebUI
 
@@ -84,6 +79,10 @@ The commands on Colab [![Open In Colab](https://colab.research.google.com/assets
 - Translate to other language by **GPT**:
 
     ```stream-translator-gpt {URL} --model large --language ja --translation_prompt "Translate from Japanese to Chinese" --openai_api_key {your_openai_key}```
+
+- Translate to English using **Whisper's native translation** (no API key needed):
+
+    ```stream-translator-gpt {URL} --model large --language ja --use_whisper_translation```
 
 - Using **OpenAI Transcription API** and **Gemini** at the same time:
 

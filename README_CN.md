@@ -72,20 +72,15 @@ flowchart LR
 
 ## 准备工作
 
-**Linux 或 Windows:**
-
-1. Python >= 3.8 (推荐 >= 3.10)
-2. [**在您的系统上安装 CUDA**](https://developer.nvidia.com/cuda-downloads)。
-3. 如果您想使用 **Faster-Whisper**，[**请将 cuDNN 安装到您的 CUDA 目录**](https://developer.nvidia.com/cudnn-downloads)。
-4. [**为您的 Python 安装 PyTorch (CUDA 版本)**](https://pytorch.org/get-started/locally/)。
-81. 如果您想使用 **Gemini API** 进行翻译，[**请创建一个 Google API 密钥**](https://aistudio.google.com/app/apikey)。
-82. 如果您想使用 **OpenAI Transcription API** 进行语音转文字或使用 **GPT API** 进行翻译，[**请创建一个 OpenAI API 密钥**](https://platform.openai.com/api-keys)。
-
-**如果您在 Windows 上，您还需要：**
-
-1. [**安装 ffmpeg 并将其添加到您的环境变量。**](https://www.thewindowsclub.com/how-to-install-ffmpeg-on-windows-10#:~:text=Click%20New%20and%20type%20the,Click%20OK%20to%20apply%20changes.)
-2. 安装 [**yt-dlp**](https://github.com/yt-dlp/yt-dlp) 并将其添加到您的环境变量。
-
+1. **Python** >= 3.8 (推荐 >= 3.10)
+2. **FFmpeg**（如果您的系统已安装 FFmpeg 可跳过此步）：
+   - Windows: `winget install ffmpeg`
+   - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
+3. [**在您的系统上安装 CUDA**](https://developer.nvidia.com/cuda-downloads)。
+4. 如果您想使用 **Faster-Whisper**，[**请将 cuDNN 安装到您的 CUDA 目录**](https://developer.nvidia.com/cudnn-downloads)。
+5. [**为您的 Python 安装 PyTorch (CUDA 版本)**](https://pytorch.org/get-started/locally/)。
+6. 如果您想使用 **Gemini API** 进行翻译，[**请创建一个 Google API 密钥**](https://aistudio.google.com/app/apikey)。
+7. 如果您想使用 **OpenAI Transcription API** 进行语音转文字或使用 **GPT API** 进行翻译，[**请创建一个 OpenAI API 密钥**](https://platform.openai.com/api-keys)。
 
 ## WebUI
 
@@ -145,6 +140,10 @@ Colab上的命令 [![Open In Colab](https://colab.research.google.com/assets/col
 
     ```stream-translator-gpt {网址} --model large --language ja --translation_prompt "翻译以下日语为中文，只输出译文，不要输出原文，在一行内输出" --openai_api_key {您的 OpenAI 密钥}```
 
+- 使用 **Whisper 原生翻译**翻译为英语（无需 API 密钥）:
+
+    ```stream-translator-gpt {网址} --model large --language ja --use_whisper_translation```
+
 - 同时使用 **OpenAI Transcription API** 和 **Gemini**:
 
     ```stream-translator-gpt {网址} --language ja --use_openai_transcription_api --openai_api_key {您的 OpenAI 密钥} --translation_prompt "翻译以下日语为中文，只输出译文，不要输出原文，在一行内输出" --google_api_key {您的 Google 密钥}```
@@ -182,15 +181,19 @@ Colab上的命令 [![Open In Colab](https://colab.research.google.com/assets/col
 | 选项                                    | 默认值                         | 描述                                                                                                                                                                      |
 | :-------------------------------------- | :----------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **通用选项**                            |
-| `--proxy`                               |                                | 用于设置所有未特别指定的 --*_proxy 的值。也会设置 http_proxy 等环境变量。                                                                                                 |
 | `--openai_api_key`                      |                                | 如果使用 GPT 翻译 / Whisper API，则需要 OpenAI API 密钥。如果您有多个密钥，可以用 "," 分隔，每个密钥将轮流使用。                                                          |
 | `--google_api_key`                      |                                | 如果使用 Gemini 翻译，则需要 Google API 密钥。如果您有多个密钥，可以用 "," 分隔，每个密钥将轮流使用。                                                                     |
+| `--openai_base_url`                     |                                | 自定义 OpenAI 的 API 端点 (影响 GPT 翻译和 OpenAI Whisper 转录)。                                                                                                         |
+| `--google_base_url`                     |                                | 自定义 Google 的 API 端点 (影响 Gemini 翻译)。                                                                                                                            |
+| `--proxy`                               |                                | 用于设置所有未特别指定的 --*_proxy 的值。也会设置 http_proxy 等环境变量。                                                                                                 |
 | **输入选项**                            |                                |                                                                                                                                                                           |
 | `URL`                                   |                                | 直播流的 URL。如果填入本地文件路径，则会将其用作输入。如果填入 "device"，将从您的 PC 设备获取输入。                                                                       |
 | `--format`                              | ba/wa*                         | 码流格式代码，此参数将直接传递给 yt-dlp。您可以通过 `yt-dlp {url} -F` 获取可用格式代码的列表。                                                                            |
 | `--list_format`                         |                                | 打印所有可用格式然后退出。                                                                                                                                                |
 | `--cookies`                             |                                | 用于打开会员专属直播，此参数将直接传递给 yt-dlp。                                                                                                                         |
+| `--cookies_from_browser`                |                                | 从浏览器提取 cookies 并传递给 yt-dlp。例如：chrome、firefox、edge、safari、opera、brave。也可以指定配置文件，如 "chrome:Profile 1"。                                      |
 | `--input_proxy`                         |                                | 为 yt-dlp 使用指定的 HTTP/HTTPS/SOCKS 代理，例如 http://127.0.0.1:7890。                                                                                                  |
+| `--user_agent`                          |                                | 自定义 yt-dlp 的 user agent 字符串，适用于有 user agent 检查的网站。                                                                                                       |
 | `--device_index`                        |                                | 需要录制的设备的索引。如果未设置，将使用系统默认的录音设备。                                                                                                              |
 | `--list_devices`                        |                                | 打印所有音频设备信息然后退出。                                                                                                                                            |
 | `--device_recording_interval`           | 0.5                            | 录制间隔越短，延迟越低，但会增加 CPU 使用率。建议设置在 0.1 和 1.0 之间。                                                                                                 |
@@ -212,28 +215,34 @@ Colab上的命令 [![Open In Colab](https://colab.research.google.com/assets/col
 | `--transcription_filters`               | emoji_filter,repetition_filter | 应用于语音转文字结果的过滤器，用 "," 分隔。我们提供 emoji_filter、repetition_filter 和 japanese_stream_filter。                                                           |
 | `--transcription_initial_prompt`        |                                | 通用的转录固定提示词/术语表。格式："提示词1, 提示词2, ..."。此文本将始终包含在传递给模型的提示词中。                                                                      |
 | `--disable_transcription_context`       |                                | 设置此标志以禁用转录中的上下文（上一句）传递。                                                                                                                            |
-| **翻译选项**                            |                                |                                                                                                                                                                           |
+| `--use_whisper_translation`             |                                | 使用 Whisper 的原生翻译功能翻译为英语，而不是 GPT/Gemini。这将完全绕过外部翻译服务。不能与 `--translation_prompt` 同时使用。                                              |
 | **翻译选项**                            |
-| `--gpt_model`                           | gpt-5-nano                     | OpenAI 的 GPT 模型名称，gpt-5 / gpt-5-mini / gpt-5-nano                                                                                                                   |
-| `--gemini_model`                        | gemini-2.5-flash-lite          | Google 的 Gemini 模型名称，gemini-2.0-flash / gemini-2.5-flash / gemini-2.5-flash-lite                                                                                    |
+| `--gpt_model`                           | gpt-5-nano                     | OpenAI 的 GPT 模型名称，gpt-5-nano / gpt-5-mini / gpt-5 / gpt-5.1 / gpt-5.2 / gpt-5.4                                                                                    |
+| `--gemini_model`                        | gemini-3.1-flash-lite-preview  | Google 的 Gemini 模型名称，gemini-3.1-flash-lite-preview / gemini-3-flash-preview                                                                                         |
 | `--translation_prompt`                  |                                | 如果使用，将通过 GPT / Gemini API (根据填写的 API 密钥决定) 将结果文本翻译成目标语言。示例："Translate from Japanese to Chinese"                                          |
-| `--translation_history_size`            | 0                              | 调用 GPT / Gemini API 时发送的历史消息作为上下文的数量。如果历史大小为 0，翻译将并行运行。如果历史大小 > 0，翻译将串行运行。                                              |
+| `--translation_history_size`            | 0                              | 调用 LLM API 时作为上下文发送的先前转录数量。建议对较弱的模型禁用上下文（设置为 0）。                                                                                     |
 | `--translation_timeout`                 | 10                             | 如果 GPT / Gemini 当一句话翻译超过此秒数，这句话将被放弃。                                                                                                                |
-| `--openai_base_url`                     |                                | 自定义 OpenAI 的 API 端点 (影响 GPT 翻译和 OpenAI Whisper 转录)。                                                                                                         |
-| `--google_base_url`                     |                                | 自定义 Google 的 API 端点 (影响 Gemini 翻译)。                                                                                                                            |
-| `--processing_proxy`                    |                                | 为 Whisper/GPT API 使用指定的 HTTP/HTTPS/SOCKS 代理 (Gemini 目前不支持在程序内指定代理)，例如 http://127.0.0.1:7890。                                                     |
 | `--use_json_result`                     |                                | 针对某些本地部署的模型，在 LLM 翻译中使用 JSON 结果。                                                                                                                     |
 | `--retry_if_translation_fails`          |                                | 当翻译超时/失败时重试。用于离线生成字幕。                                                                                                                                 |
+| `--temperature`                         |                                | 指定 LLM 翻译的 temperature 参数。                                                                                                                                        |
+| `--top_p`                               |                                | 指定 LLM 翻译的 top_p 参数。                                                                                                                                              |
+| `--top_k`                               |                                | 指定 LLM 翻译的 top_k 参数（仅影响 Gemini 翻译）。                                                                                                                        |
+| `--prompt_cache_key`                    |                                | 如果设置，将向 LLM 后端传递 prompt_cache_key 以进行缓存优化（仅影响 GPT 翻译）。                                                                                          |
+| `--reasoning_effort`                    |                                | 指定 LLM 翻译的 reasoning_effort 参数（仅影响 GPT 翻译）。                                                                                                                |
+| `--verbosity`                           |                                | 指定 LLM 翻译的 verbosity 参数（仅影响 GPT 翻译）。                                                                                                                       |
+| `--service_tier`                        |                                | 指定 LLM 翻译的 service_tier 参数（仅影响 GPT 翻译）。                                                                                                                    |
+| `--debug_mode`                          |                                | 启用调试模式。打印发送给 LLM 的消息以及每次翻译调用后的使用信息。                                                                                                         |
+| `--processing_proxy`                    |                                | 为 Whisper/GPT API 使用指定的 HTTP/HTTPS/SOCKS 代理 (Gemini 目前不支持在程序内指定代理)，例如 http://127.0.0.1:7890。                                                     |
 | **输出选项**                            |
 | `--output_timestamps`                   |                                | 输出文本时，同时输出文本的时间戳。                                                                                                                                        |
 | `--hide_transcribe_result`              |                                | 隐藏 Whisper 转录的结果。                                                                                                                                                 |
-| `--output_proxy`                        |                                | 为 Cqhttp/Discord/Telegram 使用指定的 HTTP/HTTPS/SOCKS 代理，例如 http://127.0.0.1:7890。                                                                                 |
 | `--output_file_path`                    |                                | 如果使用，将把结果文本保存到此路径。                                                                                                                                      |
 | `--cqhttp_url`                          |                                | 如果使用，将把结果文本发送到 cqhttp 服务器。                                                                                                                              |
 | `--cqhttp_token` code_snippet_pre       |                                | cqhttp 的 Token，如果服务器端未设置，则无需填写。                                                                                                                         |
 | `--discord_webhook_url`                 |                                | 如果使用，将把结果文本发送到 Discord 频道。                                                                                                                               |
 | `--telegram_token`                      |                                | Telegram 机器人的 Token。                                                                                                                                                 |
 | `--telegram_chat_id`                    |                                | 如果使用，将把结果文本发送到此 Telegram 聊天。需要与 \"--telegram_token\" 配合使用。                                                                                      |
+| `--output_proxy`                        |                                | 为 Cqhttp/Discord/Telegram 使用指定的 HTTP/HTTPS/SOCKS 代理，例如 http://127.0.0.1:7890。                                                                                 |
 
 ## 联系我
 

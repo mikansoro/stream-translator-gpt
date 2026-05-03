@@ -72,20 +72,15 @@ Finally, the results can be printed to the terminal, saved to a file, or sent to
 
 ## Prerequisites
 
-**Linux or Windows:**
-
-1. Python >= 3.8 (Recommend >= 3.10)
-2. [**Install CUDA on your system**](https://developer.nvidia.com/cuda-downloads).
-3. [**Install cuDNN to your CUDA dir**](https://developer.nvidia.com/cudnn-downloads) if you want to use **Faster-Whisper**.
-4. [**Install PyTorch (with CUDA) to your Python**](https://pytorch.org/get-started/locally/).
-5. [**Create a Google API key**](https://aistudio.google.com/app/apikey) if you want to use **Gemini API** for translation.
-6. [**Create a OpenAI API key**](https://platform.openai.com/api-keys) if you want to use **OpenAI Transcription API** for transcription or **GPT API** for translation.
-
-**If you are in Windows, you also need to:**
-
-1. [**Install and add ffmpeg to your PATH.**](https://www.thewindowsclub.com/how-to-install-ffmpeg-on-windows-10#:~:text=Click%20New%20and%20type%20the,Click%20OK%20to%20apply%20changes.)
-2. Install [**yt-dlp**](https://github.com/yt-dlp/yt-dlp) and add it to your PATH.
-
+1. **Python** >= 3.8 (Recommend >= 3.10)
+2. **FFmpeg** (skip if already installed):
+   - Windows: `winget install ffmpeg`
+   - Linux (Debian/Ubuntu): `sudo apt install ffmpeg`
+3. [**Install CUDA on your system**](https://developer.nvidia.com/cuda-downloads).
+4. [**Install cuDNN to your CUDA dir**](https://developer.nvidia.com/cudnn-downloads) if you want to use **Faster-Whisper**.
+5. [**Install PyTorch (with CUDA) to your Python**](https://pytorch.org/get-started/locally/).
+6. [**Create a Google API key**](https://aistudio.google.com/app/apikey) if you want to use **Gemini API** for translation.
+7. [**Create a OpenAI API key**](https://platform.openai.com/api-keys) if you want to use **OpenAI Transcription API** for transcription or **GPT API** for translation.
 
 ## WebUI
 
@@ -145,6 +140,10 @@ The commands on Colab [![Open In Colab](https://colab.research.google.com/assets
 
     ```stream-translator-gpt {URL} --model large --language ja --translation_prompt "Translate from Japanese to Chinese" --openai_api_key {your_openai_key}```
 
+- Translate to English using **Whisper's native translation** (no API key needed):
+
+    ```stream-translator-gpt {URL} --model large --language ja --use_whisper_translation```
+
 - Using **OpenAI Transcription API** and **Gemini** at the same time:
 
     ```stream-translator-gpt {URL} --language ja --use_openai_transcription_api --openai_api_key {your_openai_key} --translation_prompt "Translate from Japanese to Chinese" --google_api_key {your_google_key}```
@@ -182,15 +181,19 @@ The commands on Colab [![Open In Colab](https://colab.research.google.com/assets
 | Option                                  | Default Value                  | Description                                                                                                                                                                                                        |
 | :-------------------------------------- | :----------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Overall Options**                     |
-| `--proxy`                               |                                | Used to set the proxy for all --*_proxy flags if they are not specifically set. Also sets http_proxy environment variables.                                                                                        |
 | `--openai_api_key`                      |                                | OpenAI API key if using GPT translation / Whisper API. If you have multiple keys, you can separate them with "," and each key will be used in turn.                                                                |
 | `--google_api_key`                      |                                | Google API key if using Gemini translation. If you have multiple keys, you can separate them with "," and each key will be used in turn.                                                                           |
+| `--openai_base_url`                     |                                | Customize the API endpoint of OpenAI (Affects GPT translation & OpenAI Transcription).                                                                                                                             |
+| `--google_base_url`                     |                                | Customize the API endpoint of Google (Affects Gemini translation).                                                                                                                                                 |
+| `--proxy`                               |                                | Used to set the proxy for all --*_proxy flags if they are not specifically set. Also sets http_proxy environment variables.                                                                                        |
 | **Input Options**                       |
 | `URL`                                   |                                | The URL of the stream. If a local file path is filled in, it will be used as input. If fill in "device", the input will be obtained from your PC device.                                                           |
 | `--format`                              | ba/wa*                         | Stream format code, this parameter will be passed directly to yt-dlp. You can get the list of available format codes by `yt-dlp {url} -F`                                                                          |
 | `--list_format`                         |                                | Print all available formats then exit.                                                                                                                                                                             |
 | `--cookies`                             |                                | Used to open member-only stream, this parameter will be passed directly to yt-dlp.                                                                                                                                 |
+| `--cookies_from_browser`                |                                | Extract cookies from browser and pass to yt-dlp. Examples: chrome, firefox, edge, safari, opera, brave. Can also specify profile like "chrome:Profile 1".                                                         |
 | `--input_proxy`                         |                                | Use the specified HTTP/HTTPS/SOCKS proxy for yt-dlp, e.g. http://127.0.0.1:7890.                                                                                                                                   |
+| `--user_agent`                          |                                | Custom user agent string for yt-dlp, useful for sites with user agent checks.                                                                                                                                      |
 | `--device_index`                        |                                | The index of the device that needs to be recorded. If not set, the system default recording device will be used.                                                                                                   |
 | `--list_devices`                        |                                | Print all audio devices info then exit.                                                                                                                                                                            |
 | `--device_recording_interval`           | 0.5                            | The shorter the recording interval, the lower the latency, but it will increase CPU usage. It is recommended to set it between 0.1 and 1.0.                                                                        |
@@ -212,27 +215,34 @@ The commands on Colab [![Open In Colab](https://colab.research.google.com/assets
 | `--transcription_filters`               | emoji_filter,repetition_filter | Filters apply to transcription results, separated by ",". We provide emoji_filter, repetition_filter and japanese_stream_filter.                                                                                   |
 | `--transcription_initial_prompt`        |                                | General purpose prompt/glossary for transcription. Format: "Word1, Word2, Word3, ...". This text is always included in the prompt passed to the model.                                                             |
 | `--disable_transcription_context`       |                                | Set this flag to disable context (previous sentence) propagation in transcription.                                                                                                                                 |
+| `--use_whisper_translation`             |                                | Use Whisper's native translation to English instead of GPT/Gemini. This bypasses external translation services entirely. Cannot be used with `--translation_prompt`.                                              |
 | **Translation Options**                 |
-| `--gpt_model`                           | gpt-5-nano                     | OpenAI's GPT model name, gpt-5 / gpt-5-mini / gpt-5-nano                                                                                                                                                           |
-| `--gemini_model`                        | gemini-2.5-flash-lite          | Google's Gemini model name, gemini-2.0-flash / gemini-2.5-flash / gemini-2.5-flash-lite                                                                                                                            |
+| `--gpt_model`                           | gpt-5-nano                     | OpenAI's GPT model name, gpt-5-nano / gpt-5-mini / gpt-5 / gpt-5.1 / gpt-5.2 / gpt-5.4                                                                                                                           |
+| `--gemini_model`                        | gemini-3.1-flash-lite-preview  | Google's Gemini model name, gemini-3.1-flash-lite-preview / gemini-3-flash-preview                                                                                                                                 |
 | `--translation_prompt`                  |                                | If set, will translate the result text to target language via GPT / Gemini API (According to which API key is filled in). Example: "Translate from Japanese to Chinese"                                            |
-| `--translation_history_size`            | 0                              | The number of previous messages sent when calling the GPT / Gemini API. If the history size is 0, the translation will be run parallelly. If the history size > 0, the translation will be run serially.           |
+| `--translation_history_size`            | 0                              | The number of previous transcripts sent as context when calling the LLM API. It is recommended to disable context (set to 0) for weaker models.                                                                    |
 | `--translation_timeout`                 | 10                             | If the GPT / Gemini translation exceeds this number of seconds, the translation will be discarded.                                                                                                                 |
-| `--openai_base_url`                     |                                | Customize the API endpoint of OpenAI (Affects GPT translation & OpenAI Transcription).                                                                                                                             |
-| `--google_base_url`                     |                                | Customize the API endpoint of Google (Affects Gemini translation).                                                                                                                                                 |
-| `--processing_proxy`                    |                                | Use the specified HTTP/HTTPS/SOCKS proxy for Whisper/GPT API (Gemini currently doesn't support specifying a proxy within the program), e.g. http://127.0.0.1:7890.                                                 |
 | `--use_json_result`                     |                                | Using JSON result in LLM translation for some locally deployed models.                                                                                                                                             |
 | `--retry_if_translation_fails`          |                                | Retry when translation times out/fails. Used to generate subtitles offline.                                                                                                                                        |
+| `--temperature`                         |                                | Specify the temperature parameter for LLM translation.                                                                                                                                                             |
+| `--top_p`                               |                                | Specify the top_p parameter for LLM translation.                                                                                                                                                                   |
+| `--top_k`                               |                                | Specify the top_k parameter for LLM translation (Affects Gemini translation only).                                                                                                                                 |
+| `--prompt_cache_key`                    |                                | If set, will pass prompt_cache_key to the LLM backend for caching optimization (Affects GPT translation only).                                                                                                     |
+| `--reasoning_effort`                    |                                | Specify the reasoning_effort parameter for LLM translation (Affects GPT translation only).                                                                                                                         |
+| `--verbosity`                           |                                | Specify the verbosity parameter for LLM translation (Affects GPT translation only).                                                                                                                                |
+| `--service_tier`                        |                                | Specify the service_tier parameter for LLM translation (Affects GPT translation only).                                                                                                                             |
+| `--debug_mode`                          |                                | Enable debug mode. Print messages sent to LLM and usage info after each translation call.                                                                                                                          |
+| `--processing_proxy`                    |                                | Use the specified HTTP/HTTPS/SOCKS proxy for Whisper/GPT API (Gemini currently doesn't support specifying a proxy within the program), e.g. http://127.0.0.1:7890.                                                 |
 | **Output Options**                      |
 | `--output_timestamps`                   |                                | Output the timestamp of the text when outputting the text.                                                                                                                                                         |
 | `--hide_transcribe_result`              |                                | Hide the result of Whisper transcribe.                                                                                                                                                                             |
-| `--output_proxy`                        |                                | Use the specified HTTP/HTTPS/SOCKS proxy for Cqhttp/Discord/Telegram, e.g. http://127.0.0.1:7890.                                                                                                                  |
 | `--output_file_path`                    |                                | If set, will save the result text to this path.                                                                                                                                                                    |
 | `--cqhttp_url`                          |                                | If set, will send the result text to the cqhttp server.                                                                                                                                                            |
 | `--cqhttp_token`                        |                                | Token of cqhttp, if it is not set on the server side, it does not need to fill in.                                                                                                                                 |
 | `--discord_webhook_url`                 |                                | If set, will send the result text to the discord channel.                                                                                                                                                          |
 | `--telegram_token`                      |                                | Token of Telegram bot.                                                                                                                                                                                             |
 | `--telegram_chat_id`                    |                                | If set, will send the result text to this Telegram chat. Needs to be used with \"--telegram_token\".                                                                                                               |
+| `--output_proxy`                        |                                | Use the specified HTTP/HTTPS/SOCKS proxy for Cqhttp/Discord/Telegram, e.g. http://127.0.0.1:7890.                                                                                                                  |
 
 ## Contact me
 

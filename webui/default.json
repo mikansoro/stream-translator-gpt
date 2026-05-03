@@ -25,11 +25,13 @@
     "filter_emoji": true,
     "filter_repetition": true,
     "filter_japanese_stream": false,
+    "disable_transcription_context": false,
+    "transcription_initial_prompt": "",
     "transcription_filters": "emoji_filter,repetition_filter",
     "translation_prompt": "Translate from Japanese to Chinese",
     "translation_provider": "None",
     "gpt_model": "gpt-5-nano",
-    "gemini_model": "gemini-2.5-flash-lite",
+    "gemini_model": "gemini-3.1-flash-lite-preview",
     "openai_base_url": "",
     "google_base_url": "",
     "history_size": 0,
@@ -48,5 +50,6 @@
     "telegram_chat_id": "",
     "processing_proxy_trans": "",
     "openai_key_trans": "",
-    "openai_base_url_trans": ""
+    "openai_base_url_trans": "",
+    "extra_cli_args": ""
 }
